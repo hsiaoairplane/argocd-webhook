@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: webhook-ns
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webhook-server
+  namespace: webhook-ns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: webhook-server
+  template:
+    metadata:
+      labels:
+        app: webhook-server
+    spec:
+      containers:
+        - name: webhook-server
+          image: jenting/argocd-app-webhook:v0.0.1
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8443
+          volumeMounts:
+            - name: tls-certs
+              mountPath: "/certs"
+              readOnly: true
+      volumes:
+        - name: tls-certs
+          secret:
+            secretName: webhook-tls-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webhook-service
+  namespace: webhook-ns
+spec:
+  ports:
+    - port: 443
+      targetPort: 8443
+  selector:
+    app: webhook-server

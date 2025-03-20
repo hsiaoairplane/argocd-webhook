@@ -1,0 +1,16 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: webhook-tls
+  namespace: webhook-ns  # Change to match your webhook namespace
+spec:
+  secretName: webhook-tls-secret  # Secret where the TLS cert will be stored
+  duration: 8760h
+  renewBefore: 720h
+  commonName: webhook-service.webhook-ns.svc
+  dnsNames:
+    - webhook-service.webhook-ns.svc
+    - webhook-service.webhook-ns.svc.cluster.local
+  issuerRef:
+    name: webhook-tls-issuer
+    kind: Issuer

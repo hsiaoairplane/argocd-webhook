@@ -1,0 +1,20 @@
+[ req ]
+default_bits       = 2048
+default_keyfile    = privkey.pem
+distinguished_name = req_distinguished_name
+x509_extensions    = v3_req
+prompt = no
+
+[ req_distinguished_name ]
+C  = US
+ST = California
+L  = San Francisco
+O  = MyCompany
+CN = webhook-service.webhook-ns.svc  # Common Name for the certificate
+
+[ v3_req ]
+subjectAltName = @alt_names
+
+[ alt_names ]
+DNS.1 = webhook-service.webhook-ns.svc
+DNS.2 = webhook-service.webhook-ns.svc.cluster.local

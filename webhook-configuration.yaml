@@ -1,0 +1,21 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: application-validation-webhook
+webhooks:
+  - name: validate.applications.example.com
+    admissionReviewVersions: ["v1"]
+    clientConfig:
+      caBundle: "<ca-bundle>"
+      service:
+        name: webhook-service
+        namespace: webhook-ns
+        path: /validate 
+    rules:
+      - apiGroups: ["argoproj.io"]
+        apiVersions: ["v1alpha1"]
+        operations: ["UPDATE"]
+        resources: ["applications"]
+    failurePolicy: Ignore
+    sideEffects: None
+    timeoutSeconds: 3
