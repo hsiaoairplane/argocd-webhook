@@ -1,13 +1,9 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: webhook-ns
----
+
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: webhook-server
-  namespace: webhook-ns
+  namespace: argocd
 spec:
   replicas: 1
   selector:
@@ -20,8 +16,8 @@ spec:
     spec:
       containers:
         - name: webhook-server
-          image: jenting/argocd-app-webhook:v0.0.1
-          imagePullPolicy: Always
+          image: hsiaoairplane/argocd-app-webhook:v0.0.1
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8443
           volumeMounts:
@@ -36,8 +32,8 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: webhook-service
-  namespace: webhook-ns
+  name: webhook
+  namespace: argocd
 spec:
   ports:
     - port: 443

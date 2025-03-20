@@ -6,15 +6,15 @@ x509_extensions    = v3_req
 prompt = no
 
 [ req_distinguished_name ]
-C  = US
-ST = California
-L  = San Francisco
-O  = MyCompany
-CN = webhook-service.webhook-ns.svc  # Common Name for the certificate
+C  = TW
+ST = Taiwan
+L  = Taiwan
+O  = hsiaoairplane
+CN = webhook.argocd.svc  # Common Name for the certificate
 
 [ v3_req ]
 subjectAltName = @alt_names
 
 [ alt_names ]
-DNS.1 = webhook-service.webhook-ns.svc
-DNS.2 = webhook-service.webhook-ns.svc.cluster.local
+DNS.1 = webhook.argocd.svc
+DNS.2 = webhook.argocd.svc.cluster.local

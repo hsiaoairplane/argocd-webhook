@@ -1,15 +1,15 @@
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
-  name: application-validation-webhook
+  name: application-admission-webhook
 webhooks:
-  - name: validate.applications.example.com
+  - name: application-admission-webhook
     admissionReviewVersions: ["v1"]
     clientConfig:
-      caBundle: "<ca-bundle>"
+      caBundle: "<CA-BUNDLE-BASED64-ENCODED>"
       service:
-        name: webhook-service
-        namespace: webhook-ns
+        name: webhook
+        namespace: argocd
         path: /validate 
     rules:
       - apiGroups: ["argoproj.io"]

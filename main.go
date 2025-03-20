@@ -1,15 +1,27 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"os/signal"
 	"reflect"
+	"syscall"
+	"time"
 
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	log "github.com/sirupsen/logrus"
 )
+
+func init() {
+	log.SetFormatter(&log.JSONFormatter{})
+	log.SetOutput(os.Stdout)
+	log.SetLevel(log.InfoLevel)
+}
 
 func handleAdmissionReview(w http.ResponseWriter, r *http.Request) {
 	var admissionReviewReq admissionv1.AdmissionReview
@@ -57,43 +69,49 @@ func handleAdmissionReview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Remove metadata.managedFields and metadata.generation
+	cleanupMetadata(oldObj)
+	cleanupMetadata(newObj)
+
 	// Remove reconciledAt from both old and new objects
 	removeReconciledAt(oldObj)
 	removeReconciledAt(newObj)
 
-	// Compare only spec and status (ignoring metadata)
-	oldSpec := oldObj["spec"]
-	newSpec := newObj["spec"]
-	oldStatus := oldObj["status"]
-	newStatus := newObj["status"]
+	metadataChanged := !reflect.DeepEqual(oldObj["metadata"], newObj["metadata"])
+	specChanged := !reflect.DeepEqual(oldObj["spec"], newObj["spec"])
+	statusChanged := !reflect.DeepEqual(oldObj["status"], newObj["status"])
 
-	// Create new objects with just spec and status for comparison
-	oldFilteredObj := map[string]interface{}{"spec": oldSpec, "status": oldStatus}
-	newFilteredObj := map[string]interface{}{"spec": newSpec, "status": newStatus}
-
-	// Compare old and new filtered objects using reflect.DeepEqual
-	if reflect.DeepEqual(oldFilteredObj, newFilteredObj) {
-		// If they are the same after removing reconciledAt, return success to the client
-		fmt.Printf("No differences found between old and new spec/status.\n")
+	if !metadataChanged && !specChanged && !statusChanged {
+		log.Info("No significant differences found.")
 
 		admissionReviewResp.Response.Allowed = false
 		admissionReviewResp.Response.Result = &metav1.Status{
 			Status:  "Success",
 			Message: "Update successful.",
-			Code:    http.StatusOK, // HTTP 200
+			Code:    http.StatusOK,
 		}
 	} else {
-		// If there are any differences, log them
-		fmt.Println("Differences found between old and new spec/status:")
-
-		// Log the differences in spec and status
-		printDifferences(oldFilteredObj, newFilteredObj)
-
-		// Allow the update to pass
+		if metadataChanged {
+			printMetadataDifferences(oldObj, newObj)
+		}
+		if specChanged {
+			printSpecDifferences(oldObj, newObj)
+		}
+		if statusChanged {
+			printStatusDifferences(oldObj, newObj)
+		}
 		admissionReviewResp.Response.Allowed = true
 	}
 
 	sendResponse(w, admissionReviewResp)
+}
+
+// Function to remove metadata.managedFields and metadata.generation
+func cleanupMetadata(obj map[string]interface{}) {
+	if metadata, exists := obj["metadata"].(map[string]interface{}); exists {
+		delete(metadata, "managedFields")
+		delete(metadata, "generation")
+	}
 }
 
 // Helper function to remove reconciledAt from an object
@@ -109,41 +127,78 @@ func sendResponse(w http.ResponseWriter, admissionReviewResp admissionv1.Admissi
 	w.Write(responseBytes)
 }
 
-// Helper function to print the differences between old and new objects
-func printDifferences(oldObj, newObj map[string]interface{}) {
-	// Check the difference in keys and values
-	for key, oldValue := range oldObj {
-		if newValue, exists := newObj[key]; exists {
+// Function to log metadata differences
+func printMetadataDifferences(oldObj, newObj map[string]interface{}) {
+	oldMetadata, _ := oldObj["metadata"].(map[string]interface{})
+	newMetadata, _ := newObj["metadata"].(map[string]interface{})
+	printDifferences("Metadata", oldMetadata, newMetadata)
+}
+
+// Function to log spec differences
+func printSpecDifferences(oldObj, newObj map[string]interface{}) {
+	oldSpec, _ := oldObj["spec"].(map[string]interface{})
+	newSpec, _ := newObj["spec"].(map[string]interface{})
+	printDifferences("Spec", oldSpec, newSpec)
+}
+
+// Function to log status differences
+func printStatusDifferences(oldObj, newObj map[string]interface{}) {
+	oldStatus, _ := oldObj["status"].(map[string]interface{})
+	newStatus, _ := newObj["status"].(map[string]interface{})
+	printDifferences("Status", oldStatus, newStatus)
+}
+
+// Function to print differences between two objects
+func printDifferences(owner string, oldMap, newMap map[string]interface{}) {
+	if oldMap == nil && newMap == nil {
+		return
+	}
+
+	log.Debug("----- ", owner, " Differences -----")
+
+	for key, oldValue := range oldMap {
+		if newValue, exists := newMap[key]; exists {
 			if !reflect.DeepEqual(oldValue, newValue) {
-				// Log the differences
-				fmt.Printf("Field: %s\n", key)
-				fmt.Printf("Old Value: %v\n", oldValue)
-				fmt.Printf("New Value: %v\n\n", newValue)
+				log.Debugf("Key: %s\n  Old Value: %v\n  New Value: %v\n", key, oldValue, newValue)
 			}
 		} else {
-			// If the key is missing in the new object
-			fmt.Printf("Field: %s\n", key)
-			fmt.Printf("Old Value: %v\n", oldValue)
-			fmt.Println("New Value: null")
+			log.Debugf("Key removed: %s (Old Value: %v)", key, oldValue)
 		}
 	}
 
-	// Check if there are any new fields in the new object
-	for key, newValue := range newObj {
-		if _, exists := oldObj[key]; !exists {
-			// If the key is missing in the old object
-			fmt.Printf("Field: %s\n", key)
-			fmt.Println("Old Value: null")
-			fmt.Printf("New Value: %v\n\n", newValue)
+	for key, newValue := range newMap {
+		if _, exists := oldMap[key]; !exists {
+			log.Debugf("Key added: %s (New Value: %v)", key, newValue)
 		}
 	}
 }
 
 func main() {
-	http.HandleFunc("/validate", handleAdmissionReview)
-	fmt.Println("Starting webhook server on :8443...")
-	err := http.ListenAndServeTLS(":8443", "/certs/tls.crt", "/certs/tls.key", nil)
-	if err != nil {
-		fmt.Println("Failed to start webhook server:", err)
+	srv := &http.Server{
+		Addr:    ":8443",
+		Handler: http.DefaultServeMux,
 	}
+
+	http.HandleFunc("/validate", handleAdmissionReview)
+	log.Info("Starting webhook server on :8443...")
+
+	go func() {
+		if err := srv.ListenAndServeTLS("/certs/tls.crt", "/certs/tls.key"); err != nil && err != http.ErrServerClosed {
+			log.Fatal("Failed to start webhook server:", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	<-quit
+
+	log.Info("Shutting down server...")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		log.Fatal("Server forced to shutdown:", err)
+	}
+
+	log.Info("Server exiting")
 }
