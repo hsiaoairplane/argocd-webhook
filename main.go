@@ -26,7 +26,7 @@ var (
 	requestDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "webhook_request_duration_seconds",
-			Help:    "Duration of requests to the webhook server in seconds.",
+			Help:    "Duration of requests to the webhook server in milliseconds.",
 			Buckets: prometheus.DefBuckets,
 		},
 		[]string{"change"}, // Label is now "change" with values "true" and "false"
