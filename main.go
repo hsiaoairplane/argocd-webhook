@@ -21,26 +21,40 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var (
+	// Create a histogram metric to track the duration of requests in milliseconds
+	requestDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "webhook_request_duration_seconds",
+			Help:    "Duration of requests to the webhook server in seconds.",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"change"}, // Label is now "change" with values "true" and "false"
+	)
+
+	// Create a counter for tracking applications with changes vs. no changes
+	appsProcessed = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "apps_processed_total",
+			Help: "Total number of Applications processed by the webhook, differentiated by whether changes were detected.",
+		},
+		[]string{"change"}, // Label is now "change" with values "true" and "false"
+	)
+)
+
 func init() {
-	// Register the counter
-	prometheus.MustRegister(appProcessed)
+	// Register the histogram and counter metrics
+	prometheus.MustRegister(requestDuration)
+	prometheus.MustRegister(appsProcessed)
 
 	log.SetFormatter(&log.JSONFormatter{})
 	log.SetOutput(os.Stdout)
 }
 
-var (
-	// Create a single Prometheus counter with a "status" label
-	appProcessed = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "apps_processed_total",
-			Help: "Total number of Applications processed by the webhook.",
-		},
-		[]string{"status"}, // The label will be "status" with values "changed" and "nochange"
-	)
-)
-
 func handleAdmissionReview(w http.ResponseWriter, r *http.Request) {
+	// Start measuring the request duration
+	start := time.Now()
+
 	var admissionReviewReq admissionv1.AdmissionReview
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -108,8 +122,8 @@ func handleAdmissionReview(w http.ResponseWriter, r *http.Request) {
 			Code:    http.StatusOK,
 		}
 
-		// Increment the ignored app counter
-		appProcessed.WithLabelValues("nochange").Inc()
+		// Increment the counter for unchanged apps
+		appsProcessed.WithLabelValues("false").Inc()
 	} else {
 		if metadataChanged {
 			printMetadataDifferences(oldObj, newObj)
@@ -122,11 +136,14 @@ func handleAdmissionReview(w http.ResponseWriter, r *http.Request) {
 		}
 		admissionReviewResp.Response.Allowed = true
 
-		// Increment the non-ignored app counter
-		appProcessed.WithLabelValues("changed").Inc()
+		// Increment the counter for changed apps
+		appsProcessed.WithLabelValues("true").Inc()
 	}
 
 	sendResponse(w, admissionReviewResp)
+
+	// Record the request duration
+	recordRequestDuration(fmt.Sprintf("%t", metadataChanged || specChanged || statusChanged), start)
 }
 
 // Function to remove metadata.managedFields and metadata.generation
@@ -148,6 +165,12 @@ func sendResponse(w http.ResponseWriter, admissionReviewResp admissionv1.Admissi
 	responseBytes, _ := json.Marshal(admissionReviewResp)
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(responseBytes)
+}
+
+// Function to record the request duration in milliseconds
+func recordRequestDuration(status string, start time.Time) {
+	duration := time.Since(start).Seconds()
+	requestDuration.WithLabelValues(status).Observe(duration)
 }
 
 // Function to log metadata differences
@@ -216,6 +239,7 @@ func main() {
 	// Metrics endpoint
 	http.Handle("/metrics", promhttp.Handler())
 
+	// Webhook handler
 	http.HandleFunc("/validate", handleAdmissionReview)
 	log.Info("Starting webhook server on :8443...")
 
