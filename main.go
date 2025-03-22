@@ -45,7 +45,8 @@ func handleAdmissionReview(w http.ResponseWriter, r *http.Request) {
 			Kind:       "AdmissionReview",
 		},
 		Response: &admissionv1.AdmissionResponse{
-			UID: admissionReviewReq.Request.UID,
+			UID:     admissionReviewReq.Request.UID,
+			Allowed: true,
 		},
 	}
 
