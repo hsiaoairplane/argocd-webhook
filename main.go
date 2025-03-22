@@ -25,7 +25,7 @@ var (
 	// Create a histogram metric to track the duration of requests in milliseconds
 	requestDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "webhook_request_duration_seconds",
+			Name:    "argocd_webhook_request_duration",
 			Help:    "Duration of requests to the webhook server in milliseconds.",
 			Buckets: prometheus.DefBuckets,
 		},
@@ -33,9 +33,9 @@ var (
 	)
 
 	// Create a counter for tracking applications with changes vs. no changes
-	appsProcessed = prometheus.NewCounterVec(
+	processedTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "apps_processed_total",
+			Name: "argocd_webhook_processed_total",
 			Help: "Total number of Applications processed by the webhook, differentiated by whether changes were detected.",
 		},
 		[]string{"change"}, // Label is now "change" with values "true" and "false"
@@ -45,7 +45,7 @@ var (
 func init() {
 	// Register the histogram and counter metrics
 	prometheus.MustRegister(requestDuration)
-	prometheus.MustRegister(appsProcessed)
+	prometheus.MustRegister(processedTotal)
 
 	log.SetFormatter(&log.JSONFormatter{})
 	log.SetOutput(os.Stdout)
@@ -123,7 +123,7 @@ func handleAdmissionReview(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Increment the counter for unchanged apps
-		appsProcessed.WithLabelValues("false").Inc()
+		processedTotal.WithLabelValues("false").Inc()
 	} else {
 		if metadataChanged {
 			printMetadataDifferences(oldObj, newObj)
@@ -137,7 +137,7 @@ func handleAdmissionReview(w http.ResponseWriter, r *http.Request) {
 		admissionReviewResp.Response.Allowed = true
 
 		// Increment the counter for changed apps
-		appsProcessed.WithLabelValues("true").Inc()
+		processedTotal.WithLabelValues("true").Inc()
 	}
 
 	sendResponse(w, admissionReviewResp)
