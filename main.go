@@ -16,13 +16,29 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 )
 
 func init() {
+	// Register the counter
+	prometheus.MustRegister(appProcessed)
+
 	log.SetFormatter(&log.JSONFormatter{})
 	log.SetOutput(os.Stdout)
 }
+
+var (
+	// Create a single Prometheus counter with a "status" label
+	appProcessed = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "apps_processed_total",
+			Help: "Total number of Applications processed by the webhook.",
+		},
+		[]string{"status"}, // The label will be "status" with values "changed" and "nochange"
+	)
+)
 
 func handleAdmissionReview(w http.ResponseWriter, r *http.Request) {
 	var admissionReviewReq admissionv1.AdmissionReview
@@ -83,7 +99,7 @@ func handleAdmissionReview(w http.ResponseWriter, r *http.Request) {
 	statusChanged := !reflect.DeepEqual(oldObj["status"], newObj["status"])
 
 	if !metadataChanged && !specChanged && !statusChanged {
-		log.Info("No significant differences found.")
+		log.Debug("No significant differences found.")
 
 		admissionReviewResp.Response.Allowed = false
 		admissionReviewResp.Response.Result = &metav1.Status{
@@ -91,6 +107,9 @@ func handleAdmissionReview(w http.ResponseWriter, r *http.Request) {
 			Message: "Update successful.",
 			Code:    http.StatusOK,
 		}
+
+		// Increment the ignored app counter
+		appProcessed.WithLabelValues("nochange").Inc()
 	} else {
 		if metadataChanged {
 			printMetadataDifferences(oldObj, newObj)
@@ -102,6 +121,9 @@ func handleAdmissionReview(w http.ResponseWriter, r *http.Request) {
 			printStatusDifferences(oldObj, newObj)
 		}
 		admissionReviewResp.Response.Allowed = true
+
+		// Increment the non-ignored app counter
+		appProcessed.WithLabelValues("changed").Inc()
 	}
 
 	sendResponse(w, admissionReviewResp)
@@ -190,6 +212,9 @@ func main() {
 		log.Fatalf("Invalid log level: %s", *logLevel)
 	}
 	log.SetLevel(level)
+
+	// Metrics endpoint
+	http.Handle("/metrics", promhttp.Handler())
 
 	http.HandleFunc("/validate", handleAdmissionReview)
 	log.Info("Starting webhook server on :8443...")
