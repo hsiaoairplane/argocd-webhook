@@ -1,4 +1,4 @@
-module github.com/hsiaoairplane/argocd-app-webhook
+module github.com/hsiaoairplane/argocd-webhook
 
 go 1.24.1
 

@@ -15,7 +15,7 @@ test:
 
 .PHONY: build
 build:
-	go build -o argocd-app-webhook -race -v .
+	go build -o argocd-webhook -race -v .
 
 .PHONY: clean
 clean:
