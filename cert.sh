@@ -7,10 +7,10 @@ SECRET_NAME=webhook-tls-secret
 WEBHOOK_SERVICE=webhook
 CERT_DIR="./certs"
 
-Create certificate directory
+# Create certificate directory
 mkdir -p ${CERT_DIR}
 
-Step 1: Generate a CA Key and Certificate
+# Step 1: Generate a CA Key and Certificate
 openssl genrsa -out ${CERT_DIR}/ca.key 2048
 openssl req -x509 -new -nodes -key ${CERT_DIR}/ca.key -subj "/CN=Kubernetes CA" -days 365 -out ${CERT_DIR}/ca.crt
 

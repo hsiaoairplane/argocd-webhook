@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: webhook-server
-          image: hsiaoairplane/argocd-app-webhook:v0.1.0
+          image: ghcr.io/hsiaoairplane/argocd-app-webhook:v0.1.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8443

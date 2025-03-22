@@ -3,10 +3,9 @@ kind: ValidatingWebhookConfiguration
 metadata:
   name: application-admission-webhook
 webhooks:
-  - name: application-admission-webhook
+  - name: application.admission.webhook
     admissionReviewVersions: ["v1"]
     clientConfig:
-      caBundle: "<CA-BUNDLE-BASED64-ENCODED>"
       service:
         name: webhook
         namespace: argocd
