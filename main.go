@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -20,7 +22,6 @@ import (
 func init() {
 	log.SetFormatter(&log.JSONFormatter{})
 	log.SetOutput(os.Stdout)
-	log.SetLevel(log.InfoLevel)
 }
 
 func handleAdmissionReview(w http.ResponseWriter, r *http.Request) {
@@ -44,8 +45,7 @@ func handleAdmissionReview(w http.ResponseWriter, r *http.Request) {
 			Kind:       "AdmissionReview",
 		},
 		Response: &admissionv1.AdmissionResponse{
-			UID:     admissionReviewReq.Request.UID,
-			Allowed: true,
+			UID: admissionReviewReq.Request.UID,
 		},
 	}
 
@@ -174,10 +174,21 @@ func printDifferences(owner string, oldMap, newMap map[string]interface{}) {
 }
 
 func main() {
+	port := flag.String("port", "8443", "Webhook server port")
+	logLevel := flag.String("log-level", "info", "Log level (debug, info, warn, error, fatal, panic)")
+	flag.Parse()
+
+	addr := fmt.Sprintf(":%s", *port)
 	srv := &http.Server{
-		Addr:    ":8443",
+		Addr:    addr,
 		Handler: http.DefaultServeMux,
 	}
+
+	level, err := log.ParseLevel(*logLevel)
+	if err != nil {
+		log.Fatalf("Invalid log level: %s", *logLevel)
+	}
+	log.SetLevel(level)
 
 	http.HandleFunc("/validate", handleAdmissionReview)
 	log.Info("Starting webhook server on :8443...")
@@ -193,7 +204,7 @@ func main() {
 	<-quit
 
 	log.Info("Shutting down server...")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
