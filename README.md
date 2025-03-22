@@ -9,7 +9,7 @@ The **ArgoCD App Webhook** is a Kubernetes admission webhook designed to optimiz
 1. **Reduces API Server Load**: Prevents frequent PATCH API calls caused by `status.reconciledAt` updates.
 2. **Optimizes ETCD Storage**: Minimizes unnecessary revision history storage in ETCD.
 
-## De
+## Deployment
 
 ```console
 ./cert.sh
