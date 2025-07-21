@@ -5,8 +5,8 @@ go 1.24.1
 require (
 	github.com/prometheus/client_golang v1.22.0
 	github.com/sirupsen/logrus v1.9.3
-	k8s.io/api v0.33.2
-	k8s.io/apimachinery v0.33.2
+	k8s.io/api v0.33.3
+	k8s.io/apimachinery v0.33.3
 )
 
 require (
