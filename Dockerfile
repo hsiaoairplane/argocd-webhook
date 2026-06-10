@@ -23,8 +23,9 @@ COPY --from=builder /app/webhook /webhook
 # Expose port for webhook server
 EXPOSE 8443
 
-# Run as a non-root user
-USER nonroot:nonroot
+# Run as the distroless non-root user (UID 65532) using a numeric UID so that
+# Kubernetes runAsNonRoot can verify it without resolving the username.
+USER 65532:65532
 
 # Run the webhook
 ENTRYPOINT ["/webhook"]
