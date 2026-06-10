@@ -5,7 +5,7 @@ metadata:
   name: webhook-server
   namespace: argocd
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: webhook-server
@@ -31,27 +31,6 @@ spec:
             capabilities:
               drop:
                 - ALL
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: 8443
-              scheme: HTTPS
-            initialDelaySeconds: 5
-            periodSeconds: 10
-          readinessProbe:
-            httpGet:
-              path: /readyz
-              port: 8443
-              scheme: HTTPS
-            initialDelaySeconds: 5
-            periodSeconds: 10
-          resources:
-            requests:
-              cpu: 50m
-              memory: 64Mi
-            limits:
-              cpu: 200m
-              memory: 128Mi
           volumeMounts:
             - name: tls-certs
               mountPath: "/certs"
