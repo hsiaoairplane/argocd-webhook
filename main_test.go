@@ -52,7 +52,7 @@ func TestWebhookOperationHandler(t *testing.T) {
 			handleAdmissionReview(w, req)
 
 			resp := w.Result()
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 
 			if resp.StatusCode != http.StatusOK {
 				t.Errorf("Expected status code 200, got %d", resp.StatusCode)
@@ -104,7 +104,7 @@ func TestHandleAdmissionReview_StatusSyncRevisionChange(t *testing.T) {
 	handleAdmissionReview(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Expected status code 200, got %d", resp.StatusCode)
@@ -166,7 +166,7 @@ func decodeResponse(t *testing.T, w *httptest.ResponseRecorder) *admissionv1.Adm
 	t.Helper()
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("Expected status code 200, got %d", resp.StatusCode)
@@ -245,6 +245,28 @@ func TestHandleAdmissionReview_NilRequest(t *testing.T) {
 	}
 }
 
+// TestHandleAdmissionReview_MethodNotAllowed verifies non-POST methods are rejected.
+func TestHandleAdmissionReview_MethodNotAllowed(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/validate", nil)
+	w := httptest.NewRecorder()
+	handleAdmissionReview(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("Expected status code 405 for a GET request, got %d", w.Code)
+	}
+}
+
+// TestHandleHealth verifies the health endpoint returns 200 OK.
+func TestHandleHealth(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	w := httptest.NewRecorder()
+	handleHealth(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status code 200 from health endpoint, got %d", w.Code)
+	}
+}
+
 func TestHandleAdmissionReview_StatusReconciledAtChange(t *testing.T) {
 	reqBody := admissionv1.AdmissionReview{
 		TypeMeta: metav1.TypeMeta{
@@ -271,7 +293,7 @@ func TestHandleAdmissionReview_StatusReconciledAtChange(t *testing.T) {
 	handleAdmissionReview(w, req)
 
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Expected status code 200, got %d", resp.StatusCode)
