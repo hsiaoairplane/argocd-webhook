@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -21,10 +20,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
 )
-
-// maxBodyBytes caps the admission request body. An AdmissionReview carries both
-// the old and new object, each up to the ~1.5 MiB etcd limit, so allow headroom.
-const maxBodyBytes = 8 << 20 // 8 MiB
 
 var (
 	// Create a histogram metric to track the duration of requests in seconds
@@ -60,19 +55,10 @@ func handleAdmissionReview(w http.ResponseWriter, r *http.Request) {
 	// Start measuring the request duration
 	start := time.Now()
 
-	// Admission webhooks are only ever called via POST.
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Bound the request body to protect against oversized or slow payloads.
-	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
-
 	var admissionReviewReq admissionv1.AdmissionReview
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "failed to read request body", http.StatusBadRequest)
+		http.Error(w, "failed to read request body", http.StatusInternalServerError)
 		return
 	}
 
@@ -181,25 +167,13 @@ func removeReconciledAt(obj map[string]interface{}) {
 	}
 }
 
-// handleHealth serves liveness and readiness probes.
-func handleHealth(w http.ResponseWriter, _ *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	_, _ = io.WriteString(w, "ok")
-}
-
 func sendResponse(w http.ResponseWriter, admissionReviewResp admissionv1.AdmissionReview) {
-	responseBytes, err := json.Marshal(admissionReviewResp)
-	if err != nil {
-		http.Error(w, "failed to marshal response", http.StatusInternalServerError)
-		return
-	}
+	responseBytes, _ := json.Marshal(admissionReviewResp)
 	w.Header().Set("Content-Type", "application/json")
-	if _, err := w.Write(responseBytes); err != nil {
-		log.Errorf("Failed to write response: %v", err)
-	}
+	w.Write(responseBytes)
 }
 
-// Function to record the request duration in seconds
+// Function to record the request duration in milliseconds
 func recordRequestDuration(status string, start time.Time) {
 	duration := time.Since(start).Seconds()
 	requestDuration.WithLabelValues(status).Observe(duration)
@@ -258,15 +232,8 @@ func main() {
 
 	addr := fmt.Sprintf(":%s", *port)
 	srv := &http.Server{
-		Addr:              addr,
-		Handler:           http.DefaultServeMux,
-		ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout:       10 * time.Second,
-		WriteTimeout:      10 * time.Second,
-		IdleTimeout:       60 * time.Second,
-		TLSConfig: &tls.Config{
-			MinVersion: tls.VersionTLS12,
-		},
+		Addr:    addr,
+		Handler: http.DefaultServeMux,
 	}
 
 	level, err := log.ParseLevel(*logLevel)
@@ -278,13 +245,9 @@ func main() {
 	// Metrics endpoint
 	http.Handle("/metrics", promhttp.Handler())
 
-	// Liveness and readiness probes
-	http.HandleFunc("/healthz", handleHealth)
-	http.HandleFunc("/readyz", handleHealth)
-
 	// Webhook handler
 	http.HandleFunc("/validate", handleAdmissionReview)
-	log.Infof("Starting webhook server on %s...", addr)
+	log.Info("Starting webhook server on :8443...")
 
 	go func() {
 		if err := srv.ListenAndServeTLS("/certs/tls.crt", "/certs/tls.key"); err != nil && err != http.ErrServerClosed {
