@@ -14,12 +14,23 @@ spec:
       labels:
         app: webhook-server
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: webhook-server
           image: ghcr.io/hsiaoairplane/argocd-webhook:v0.2.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8443
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
           volumeMounts:
             - name: tls-certs
               mountPath: "/certs"

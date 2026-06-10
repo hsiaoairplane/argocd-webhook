@@ -22,11 +22,11 @@ import (
 )
 
 var (
-	// Create a histogram metric to track the duration of requests in milliseconds
+	// Create a histogram metric to track the duration of requests in seconds
 	requestDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "argocd_webhook_request_duration",
-			Help:    "Duration of requests to the webhook server in milliseconds.",
+			Name:    "argocd_webhook_request_duration_seconds",
+			Help:    "Duration of requests to the webhook server in seconds.",
 			Buckets: prometheus.DefBuckets,
 		},
 		[]string{"change"}, // Label is now "change" with values "true" and "false"
@@ -65,6 +65,12 @@ func handleAdmissionReview(w http.ResponseWriter, r *http.Request) {
 	err = json.Unmarshal(body, &admissionReviewReq)
 	if err != nil {
 		http.Error(w, "failed to unmarshal request", http.StatusBadRequest)
+		return
+	}
+
+	// Guard against a malformed payload that unmarshals without an admission request.
+	if admissionReviewReq.Request == nil {
+		http.Error(w, "missing admission request", http.StatusBadRequest)
 		return
 	}
 
